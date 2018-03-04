@@ -9,6 +9,15 @@ const moment = require('moment');
 const exec = require('child_process').exec;
 const PythonShell = require('python-shell');
 const path = require("path");
+//Ergänzungen ADR
+var request = require('request');
+var cheerio = require('cheerio');
+var fs      = require('fs');
+var url = 'http://www.dasoertliche.de/?form_name=search_inv&ph=';
+var title = '';
+var adresse = '';
+var anrufer = 'kein Treffer auf Örtliche.de';
+//Ergänzungen ADR
 
 const CALL_TYPE = Object.freeze({
 	INCOMING : "1",
@@ -41,6 +50,50 @@ module.exports = NodeHelper.create({
 			return number;
 		}
 	},
+
+//Ergänzungen ADR
+	getName2: function(number) {
+		//Normalize number
+		var number_formatted = this.normalizePhoneNumber(number);
+		//Check if number is in AdressBook if yes return the name
+		if (number_formatted in this.AddressBook) {
+			console.log(moment().format("DD.MM.YYYY HH:mm") + ' Anrufer: ' + number + ' ' + this.AddressBook[number_formatted]);//ADR
+			return this.AddressBook[number_formatted];
+		} else {
+			//Not in AdressBook return original number
+			//Ergänzungen ADR -Reverse Lookup
+			request(url + number, function (error, response, html) {
+				if (!error) {
+				  var $ = cheerio.load(html);
+				  
+				  $('.left').filter(function(){
+					  var data = $(this);
+					  title = data.text().trim();
+					  adresse = data.children().eq(2).text().trim();
+					  })
+					  
+				  $('.name ').filter(function(){
+					  var data = $(this);
+					  anrufer = data.text().trim();
+					  })
+				}
+				else {
+				  console.log(moment().format("DD.MM.YYYY HH:mm") + ' Fehler im Websiteparsing aufgetreten: ' + error);
+				}
+			  });
+
+			  if (anrufer === 'kein Treffer auf Örtliche.de') {
+				  	console.log(moment().format("DD.MM.YYYY HH:mm") + ' Anrufer Lookup: ' + number + ' - ' + anrufer + ', ' + adresse);
+				  	return number + ' (kein LookUp mgl.)';
+				} else {
+					console.log(moment().format("DD.MM.YYYY HH:mm") + ' Anrufer Lookup: ' + number + ' - ' + anrufer + ', ' + adresse);
+					return anrufer + ", " + adresse + ' (' + number + ')';
+				}
+			//console.log(moment().format("DD.MM.YYYY HH:mm") + ' Anrufer Lookup: ' + number + ' - ' + anrufer + ', ' + adresse);
+			//return number + '\n' + anrufer + ", " + adresse;
+		}
+	},
+//Ergänzungen ADR
 
 	socketNotificationReceived: function(notification, payload) {
 		//Received config from client
@@ -81,19 +134,28 @@ module.exports = NodeHelper.create({
 		monitor.on("inbound", function(call) {
 			//If caller is not empty
 			if (call.caller != "") {
-				self.sendSocketNotification("call", self.getName(call.caller));
+				self.sendSocketNotification("call", self.getName2(call.caller));//Ergänzungen ADR, mit der Funktion 2 versehen
+				fs.appendFile('anrufe.txt', moment().format("DD.MM.YYYY HH:mm") + ' Gesamt: ' + call.caller + ' ' + self.getName2(call.caller) +'\n', function(err){ //Ergänzungen ADR, mit der Funktion 2 versehen
+				console.log('anrufe.txt erfolgreich geschrieben'); //Ergänzungen ADR, mit der Funktion 2 versehen
+				  })
+			} else {//Ergänzungen ADR, mit der Funktion 2 versehen
+				//ADR unterdrückter Rufnummer
+				//self.sendSocketNotification("call", ' mit unterdrückter Rufnummer');//Ergänzungen ADR, muss inaktiv sein, da Alert nicht mehr verschwindet
+				fs.appendFile('anrufe.txt', moment().format("DD.MM.YYYY HH:mm") + ' Gesamt: Anrufer mit unterdrückter Rufnummer' + '\n', function(err){ //Ergänzungen ADR
+				console.log('Anrufer mit unterdrückter Rufnummer'); //Ergänzungen ADR
+				})
 			};
 		});
 
 		//Call accepted
 		monitor.on("connected", function(call) {
-			self.sendSocketNotification("connected", self.getName(call.caller));
+			self.sendSocketNotification("connected", self.getName2(call.caller));//Ergänzungen ADR, mit der Funktion 2 versehen
 		});
 
 		//Caller disconnected
 		monitor.on("disconnected", function(call) {
 			//send clear command to interface
-			self.sendSocketNotification("disconnected", {"caller": self.getName(call.caller), "duration": call.duration});
+			self.sendSocketNotification("disconnected", {"caller": self.getName2(call.caller), "duration": call.duration});//Ergänzungen ADR, mit der Funktion 2 versehen
 		});
 		console.log(this.name + " is waiting for incoming calls.");
 	},

@@ -24,6 +24,8 @@
     "vcard-json": "latest",
     "phone-formatter": "latest",
     "python-shell": "latest",
-    "xml2js": "latest"
+    "xml2js": "latest",
+    "request"    : "latest",
+    "cheerio"    : "latest"
     }
 }
